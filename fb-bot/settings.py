@@ -29,6 +29,7 @@ ALLOWED_HOSTS = ['*']
 # Application definition
 
 INSTALLED_APPS = [
+    'quizbot2017',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
