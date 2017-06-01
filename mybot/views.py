@@ -6,7 +6,6 @@ from django.http.response import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 
-from mybot.model_cmd import *
 from mybot.messenger_api import *
 from mybot.fb_setting import *
 
