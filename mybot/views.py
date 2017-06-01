@@ -139,7 +139,8 @@ def questions(fbid):
     try:
         users_fb = get(im_type='fb',im_id=im_id)
     except Exception as e:
-        users_fb = set(serial=recevied_message, im_type='fb', im_id=im_id)
+        #TODO hotcode assign serial = 1, QQ
+        users_fb = set(serial="1", im_type='fb', im_id=im_id)
 
     q = users_fb.get_next_question()
     return q
