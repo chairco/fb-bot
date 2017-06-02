@@ -16,8 +16,8 @@ def get(im_type, im_id):
     return users.get_user(im_type=im_type,im_id=im_id)
 
 
-def set(serial, im_type, im_id):
-    return users.add_user_im(serial=serial, im_type=im_type, im_id=im_id)
+def set(ticket, serial, im_type, im_id):
+    return users.add_user_im(ticket=ticket, serial=serial, im_type=im_type, im_id=im_id)
 
 
 def question_list():
@@ -39,6 +39,29 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
 
     fb = FbMessageApi(fbid)
 
+    if recevied_message == "not_exist_"+str(fbid):
+        data = [
+        {
+            "type": "postback",
+            "title": "早鳥票",
+            "payload": "早鳥票"
+        },{
+            "type": "postback",
+            "title": "講者邀請票",
+            "payload": "講者邀請票"
+        },{
+            "type": "postback",
+            "title": "邀請票",
+            "payload": "邀請票"
+        }
+        ]
+        fb.template_message(
+            title="選擇票種",
+            image_url="https://pbs.twimg.com/profile_images/851073823357059072/dyff_G3a.jpg",
+            subtitle="請選擇",
+            data=data)
+        return 0
+
     if recevied_message == "right"+str(fbid):
         content = "答對了 ^^ 加油加油！"
         fb.text_message(content)
@@ -46,6 +69,11 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
 
     if recevied_message == "wrong"+str(fbid):
         content = "答錯了 QQ 再接再厲！"
+        fb.text_message(content)
+        return 0
+
+    if recevied_message == "查分數":
+        content = "你目前的分數：{}".format(q.get_score(True))
         fb.text_message(content)
         return 0
 
@@ -111,14 +139,13 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
 def questions(fbid):
     im_id = fbid
     try:
-        users_fb = get(im_type='fb',im_id=im_id)
+        users_fb = get(im_type='fb', im_id=im_id)
     except Exception as e:
         #TODO hotcode assign serial = 1, QQ
-        users_fb = set(serial="1", im_type='fb', im_id=im_id)
+        raise e
 
     q = users_fb.get_next_question()
     return q
-
 
 class MyBotView(generic.View):
 
@@ -142,11 +169,15 @@ class MyBotView(generic.View):
                         )
                         print(get_current.answer)
                         if str(reply['payload']) == str(get_current.answer):
+                            # 設定分數
+                            get(im_type='fb', im_id=str(message['sender']['id'])).save_answer(question=get_current, correctness=True)
                             post_facebook_message(
                                 message['sender']['id'], 
                                 'right'+str(message['sender']['id'])
                             )
                         else:
+                            # 設定分數
+                            get(im_type='fb', im_id=str(message['sender']['id'])).save_answer(question=get_current, correctness=False)
                             post_facebook_message(message['sender']['id'], 
                                 'wrong'+str(message['sender']['id'])
                             )
@@ -162,6 +193,7 @@ class MyBotView(generic.View):
                     print('postback')
                     try:
                         question = questions(fbid=message['sender']['id'])
+                        print(question.answer)
                         im.set_current_question(
                             question=question, im_type='fb', im_id=str(message['sender']['id'])
                         )
@@ -170,7 +202,9 @@ class MyBotView(generic.View):
                             q=question
                         )
                     except:
-                        return HttpResponse()
+                        post_facebook_message(
+                            message['sender']['id'], "not_exist_"+str(message['sender']['id'])
+                        )
         return HttpResponse()
 
     @method_decorator(csrf_exempt)
