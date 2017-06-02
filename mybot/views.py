@@ -9,8 +9,7 @@ from django.utils.decorators import method_decorator
 from mybot.messenger_api import *
 from mybot.fb_setting import *
 
-from quizbot2017.quizzler import users
-from quizbot2017.quizzler import questions
+from quizbot2017.quizzler import users, questions, im
 
 
 def get(im_type, im_id):
@@ -29,8 +28,9 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
     # user_details_url = "https://graph.facebook.com/v2.6/%s" % fbid
     # user_details_params = {'fields': 'first_name,last_name,profile_pic', 'access_token': PAGE_ACCESS_TOKEN}
     # user_details = requests.get(user_details_url, user_details_params).json()
-    """
-    process: 輸入 game --> 開始玩 --> 輸入 kktix 代號驗證  
+    """Process:
+    查詢 id -> 第一次進入遊戲 -> 詢問 mail, serial -> 綁定 fb or line id -> 開始遊戲
+           -> 第二次進入遊戲 -> 開始遊戲
     """
     if q is None:
         q = []
@@ -39,32 +39,12 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
 
     fb = FbMessageApi(fbid)
 
-    if recevied_message == "主畫面":
-        data = [
-            {
-                "type": "postback",
-                "title": "猜猜看",
-                "payload": "猜猜看"
-            },
-            {
-                "type": "postback",
-                "title": "查分數",
-                "payload": "查分數"
-            }
-        ]
-        fb.template_message(
-            title="選擇",
-            image_url="https://pbs.twimg.com/profile_images/851073823357059072/dyff_G3a.jpg",
-            subtitle="請選擇",
-            data=data)
-        return 0
-
-    if recevied_message == "right":
+    if recevied_message == "right"+str(fbid):
         content = "答對了 ^^ 加油加油！"
         fb.text_message(content)
         return 0
 
-    if recevied_message == "wrong":
+    if recevied_message == "wrong"+str(fbid):
         content = "答錯了 QQ 再接再厲！"
         fb.text_message(content)
         return 0
@@ -76,16 +56,6 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
 
     #if reg == True and str.isdigit(recevied_message):
     if recevied_message == "開始玩":
-        '''
-        im_id = fbid
-        try:
-            users_fb = get(im_type='fb',im_id=im_id)
-        except Exception as e:
-            users_fb = set(serial=recevied_message, im_type='fb', im_id=im_id)
-        content = fbid+', 合法使用者'
-        fb.text_message(content)
-        '''
-        #q = users_fb.get_next_question()
         r = random.randint(0, 3)
         q.wrong_choices.insert(r, q.answer)
 
@@ -125,6 +95,10 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
             "type": "web_url",
             "url": "https://facebook.com/Jasons-chatbot-299082580532144/",
             "title": "聯絡作者"
+        },{
+            "type": "postback",
+            "title": "查分數",
+            "payload": "查分數"
         }
     ]
     fb.template_message(
@@ -155,7 +129,6 @@ class MyBotView(generic.View):
             return HttpResponse('Error, invalid token')
 
     def post(self, request, *args, **kwargs):
-        global answer
         incoming_message = json.loads(self.request.body.decode('utf-8'))
         for entry in incoming_message['entry']:
             for message in entry['messaging']:
@@ -164,11 +137,19 @@ class MyBotView(generic.View):
                     print('message')
                     if 'quick_reply' in message['message']:
                         reply = message["message"]["quick_reply"]
-                        print(answer)
-                        if str(reply['payload']) == answer:
-                            post_facebook_message(message['sender']['id'], 'right')
+                        get_current = im.get_current_question(
+                            im_type='fb', im_id=str(message['sender']['id'])
+                        )
+                        print(get_current.answer)
+                        if str(reply['payload']) == str(get_current.answer):
+                            post_facebook_message(
+                                message['sender']['id'], 
+                                'right'+str(message['sender']['id'])
+                            )
                         else:
-                            post_facebook_message(message['sender']['id'], 'wrong')
+                            post_facebook_message(message['sender']['id'], 
+                                'wrong'+str(message['sender']['id'])
+                            )
                     try:
                         post_facebook_message(
                             message['sender']['id'], message['message']['text'], 
@@ -181,8 +162,9 @@ class MyBotView(generic.View):
                     print('postback')
                     try:
                         question = questions(fbid=message['sender']['id'])
-                        answer = question.answer
-                        print(answer)
+                        im.set_current_question(
+                            question=question, im_type='fb', im_id=str(message['sender']['id'])
+                        )
                         post_facebook_message(
                             message['sender']['id'], message['postback']['payload'],
                             q=question
