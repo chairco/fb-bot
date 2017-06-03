@@ -36,7 +36,7 @@ def questions(fbid):
     return q
 
 
-def post_facebook_message(fbid, recevied_message, reg=False, q=None):
+def post_facebook_message(fbid, recevied_message, q=None):
     # user_details_url = "https://graph.facebook.com/v2.6/%s" % fbid
     # user_details_params = {'fields': 'first_name,last_name,profile_pic', 'access_token': PAGE_ACCESS_TOKEN}
     # user_details = requests.get(user_details_url, user_details_params).json()
@@ -93,23 +93,33 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
         return 0
 
     if recevied_message == "register_user":
+        im.activate_registration_session(im_type='fb', im_id=str(fbid))
         fb.text_message("請輸入註冊在 kktix 電子序號(ex:1)")
         return 0
 
-    if reg == True and str.isdigit(recevied_message):
-        try:
-            users_fb = get(im_type='fb', im_id=str(fbid))
-            fb.text_message('已經註冊了')
-        except Exception as e:
-            users_fb = set(
-                ticket='speaker',
-                serial=str(recevied_message), 
-                im_type='fb', im_id=str(fbid)
-            )
-            print(users_fb)
-            fb.text_message('註冊成功可以開始玩囉！')
-            raise e
-        
+    if im.is_registration_session_active(im_type='fb',im_id=fbid):
+        if str.isdigit(recevied_message):
+            try:
+                users_fb = get(im_type='fb', im_id=str(fbid))
+                im.complete_registration_session(im_type='fb', im_id=str(fbid))
+                fb.text_message('已經註冊了')
+            except Exception as e:
+                users_fb = set(
+                    ticket='speaker',
+                    serial=str(recevied_message), 
+                    im_type='fb', im_id=str(fbid)
+                )
+                print(users_fb)
+                fb.text_message('註冊成功可以開始玩囉！')
+                im.complete_registration_session(im_type='fb', im_id=str(fbid))
+                raise e
+        else:
+            fb.text_message('不合法的 kktix 序號，請再次輸入')
+        return 0
+
+    if recevied_message == "clean":
+        fb.text_message('清除狀態，雄壯威武！')
+        im.complete_registration_session(im_type='fb', im_id=str(fbid))
         return 0
 
     if recevied_message == "開始玩":
@@ -198,8 +208,7 @@ class MyBotView(generic.View):
                             )
                     try:
                         post_facebook_message(
-                            message['sender']['id'], message['message']['text'], 
-                            reg=True
+                            message['sender']['id'], message['message']['text']
                         )
                     except:
                         return HttpResponse()
