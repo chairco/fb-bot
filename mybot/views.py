@@ -24,6 +24,18 @@ def question_list():
     return questions.get_id_question_pairs()
 
 
+def questions(fbid):
+    im_id = fbid
+    try:
+        users_fb = get(im_type='fb', im_id=im_id)
+    except Exception as e:
+        #TODO hotcode assign serial = 1, QQ
+        raise e
+
+    q = users_fb.get_next_question()
+    return q
+
+
 def post_facebook_message(fbid, recevied_message, reg=False, q=None):
     # user_details_url = "https://graph.facebook.com/v2.6/%s" % fbid
     # user_details_params = {'fields': 'first_name,last_name,profile_pic', 'access_token': PAGE_ACCESS_TOKEN}
@@ -43,22 +55,19 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
         data = [
         {
             "type": "postback",
-            "title": "早鳥票",
-            "payload": "早鳥票"
-        },{
+            "title": "輸入信箱開始註冊",
+            "payload": "register_user"
+        },
+        {
             "type": "postback",
-            "title": "講者邀請票",
-            "payload": "講者邀請票"
-        },{
-            "type": "postback",
-            "title": "邀請票",
-            "payload": "邀請票"
+            "title": "不玩了",
+            "payload": "exit"
         }
         ]
         fb.template_message(
-            title="選擇票種",
+            title="開始註冊",
             image_url="https://pbs.twimg.com/profile_images/851073823357059072/dyff_G3a.jpg",
-            subtitle="請選擇",
+            subtitle="歡迎 PyConTW 2017 大會遊戲",
             data=data)
         return 0
 
@@ -73,16 +82,36 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
         return 0
 
     if recevied_message == "查分數":
-        content = "你目前的分數：{}".format(q.get_score(True))
+        content = "你目前的分數：{}".format(
+            get(im_type='fb', im_id=str(fbid)).get_current_score()
+        )
         fb.text_message(content)
         return 0
 
-    #if recevied_message == "開始玩":
-    #    content = "輸入 kktix 代碼（數字部分）"
-    #    fb.text_message(content)
-    #    return 0
+    if recevied_message == "exit":
+        fb.text_message("記得要再回來啊～～～～！")
+        return 0
 
-    #if reg == True and str.isdigit(recevied_message):
+    if recevied_message == "register_user":
+        fb.text_message("請輸入註冊在 kktix 電子序號(ex:1)")
+        return 0
+
+    if reg == True and str.isdigit(recevied_message):
+        try:
+            users_fb = get(im_type='fb', im_id=str(fbid))
+            fb.text_message('已經註冊了')
+        except Exception as e:
+            users_fb = set(
+                ticket='speaker',
+                serial=str(recevied_message), 
+                im_type='fb', im_id=str(fbid)
+            )
+            print(users_fb)
+            fb.text_message('註冊成功可以開始玩囉！')
+            raise e
+        
+        return 0
+
     if recevied_message == "開始玩":
         r = random.randint(0, 3)
         q.wrong_choices.insert(r, q.answer)
@@ -119,14 +148,11 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
             "type": "postback",
             "title": "開始玩",
             "payload": "開始玩"
-        },{
-            "type": "web_url",
-            "url": "https://facebook.com/Jasons-chatbot-299082580532144/",
-            "title": "聯絡作者"
-        },{
+        },
+        {
             "type": "postback",
-            "title": "查分數",
-            "payload": "查分數"
+            "title": "不玩了",
+            "payload": "exit"
         }
     ]
     fb.template_message(
@@ -135,17 +161,6 @@ def post_facebook_message(fbid, recevied_message, reg=False, q=None):
         subtitle="請選擇",
         data=data)
 
-
-def questions(fbid):
-    im_id = fbid
-    try:
-        users_fb = get(im_type='fb', im_id=im_id)
-    except Exception as e:
-        #TODO hotcode assign serial = 1, QQ
-        raise e
-
-    q = users_fb.get_next_question()
-    return q
 
 class MyBotView(generic.View):
 
@@ -188,23 +203,35 @@ class MyBotView(generic.View):
                         )
                     except:
                         return HttpResponse()
+
                 if 'postback' in message:
                     #pprint(message)
                     print('postback')
-                    try:
-                        question = questions(fbid=message['sender']['id'])
-                        print(question.answer)
-                        im.set_current_question(
-                            question=question, im_type='fb', im_id=str(message['sender']['id'])
-                        )
+                    if message['postback']['payload'] == 'register_user':
+                        print('register_user')
                         post_facebook_message(
-                            message['sender']['id'], message['postback']['payload'],
-                            q=question
+                            message['sender']['id'], 'register_user'
                         )
-                    except:
+                    elif message['postback']['payload'] == 'exit':
+                        print('exit')
                         post_facebook_message(
-                            message['sender']['id'], "not_exist_"+str(message['sender']['id'])
+                            message['sender']['id'], 'exit'
                         )
+                    else:
+                        try:
+                            question = questions(fbid=message['sender']['id'])
+                            print(question.answer)
+                            im.set_current_question(
+                                question=question, im_type='fb', im_id=str(message['sender']['id'])
+                            )
+                            post_facebook_message(
+                                message['sender']['id'], message['postback']['payload'],
+                                q=question
+                            )
+                        except:
+                            post_facebook_message(
+                                message['sender']['id'], "not_exist_"+str(message['sender']['id'])
+                            )
         return HttpResponse()
 
     @method_decorator(csrf_exempt)

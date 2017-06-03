@@ -26,6 +26,19 @@ class User:
     def __init__(self, *, serial):
         self.serial = serial
 
+    def get_current_score(self):
+        cursor = db.get_cursor()
+        cursor.execute(
+            """
+            SELECT "score" FROM "user"
+            WHERE "serial" = %(user_serial)s
+            LIMIT 1
+            """,
+            {'user_serial': self.serial},
+        )
+        score, = cursor.fetchone()
+        return score
+
     def get_next_question(self):
         cursor = db.get_cursor()
         cursor.execute(
@@ -112,7 +125,7 @@ def get_user(*, im_type, im_id):
     return User(serial=serial)
 
 
-def add_user_im(*, ticket, serial, im_type, im_id):
+def add_user_im(*, ticket='speaker', serial, im_type, im_id):
     """Create a new entry for given user serial with given ticket type.
 
     This function assumes an existing IM identification has not been used.
